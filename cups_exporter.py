@@ -180,7 +180,7 @@ class SignalHandler:
 
 if __name__ == "__main__":
     # Start up the server to expose the metrics.
-    logger.warning(f"Starting CUPS exporter server with args: {args}")
+    logger.info(f"Starting CUPS exporter server with args: {args}")
     REGISTRY.register(
         CUPSCollector(
             args.cups_host,
