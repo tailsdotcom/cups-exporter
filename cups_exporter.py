@@ -2,6 +2,7 @@
 """Export CUPS metrics to prometheus
 """
 
+import signal
 import argparse
 import time
 
@@ -144,6 +145,17 @@ class CUPSCollector:
                     1)
 
 
+class SignalHandler:
+    exit = False
+
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, signum, frame):
+        self.exit = True
+
+
 if __name__ == '__main__':
     # Start up the server to expose the metrics.
     REGISTRY.register(CUPSCollector(
@@ -151,5 +163,7 @@ if __name__ == '__main__':
         args.cups_port,
         args.cups_user))
     start_http_server(args.listen_port)
-    while True:
+
+    sig_handler = SignalHandler()
+    while not sig_handler.exit:
         time.sleep(1)
