@@ -1,27 +1,49 @@
-#!/usr/bin/env python3
-"""Export CUPS metrics to prometheus
+"""
+Export CUPS metrics to prometheus.
 """
 
 import signal
 import argparse
 import time
+import logging
 
 import cups
 from prometheus_client import start_http_server
-from prometheus_client.core import (REGISTRY, CounterMetricFamily,
-                                    GaugeMetricFamily)
+from prometheus_client.core import (
+    REGISTRY,
+    CounterMetricFamily,
+    GaugeMetricFamily,
+)
 
 parser = argparse.ArgumentParser(
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
 parser.add_argument(
-    "--cups-host", help="The cups host to connect to", default="localhost")
-parser.add_argument("--cups-port", type=int,
-                    help="The cups port to use", default=631)
+    "--cups-host",
+    help="The cups host to connect to",
+    default="localhost",
+)
 parser.add_argument(
-    "--cups-user", help="The user to connect with", default="default")
-parser.add_argument("--listen-port", type=int,
-                    help="The port the exporter will listen on", default=9329)
+    "--cups-port",
+    type=int,
+    help="The cups port to use",
+    default=631,
+)
+parser.add_argument(
+    "--cups-user",
+    help="The user to connect with",
+    default="default",
+)
+parser.add_argument(
+    "--listen-port",
+    type=int,
+    help="The port the exporter will listen on",
+    default=9329,
+)
 args = parser.parse_args()
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class CUPSCollector:
@@ -43,10 +65,8 @@ class CUPSCollector:
         self.port = port
         self.user = user
 
-
     def collect(self):
-        """Collects the metrics from cups
-        """
+        """Collects the metrics from cups"""
         start = time.time()
 
         self._setup_empty_prometheus_metrics()
@@ -59,21 +79,18 @@ class CUPSCollector:
             conn = cups.Connection()
 
             printers = conn.getPrinters()
-            self._prometheus_metrics['printersNum'].add_metric(
-                [],
-                len(printers))
+            self._prometheus_metrics["printersNum"].add_metric([], len(printers))
 
             self._getPrinterStatus(printers)
             self._getJobData(conn)
 
-            self._prometheus_metrics['cupsUp'].add_metric([], 1)
+            self._prometheus_metrics["cupsUp"].add_metric([], 1)
         except Exception as e:
-            self._prometheus_metrics['cupsUp'].add_metric([], 0)
+            self._prometheus_metrics["cupsUp"].add_metric([], 0)
             print(e)
 
         duration = time.time() - start
-        self._prometheus_metrics['scrape_duration_seconds'].add_metric(
-            [], duration)
+        self._prometheus_metrics["scrape_duration_seconds"].add_metric([], duration)
 
         for metric in self._prometheus_metrics.values():
             yield metric
@@ -83,46 +100,48 @@ class CUPSCollector:
         The metrics we want to export.
         """
         self._prometheus_metrics = {
-            'printJobsNum':
-                GaugeMetricFamily('cups_print_jobs_active',
-                                  'Number of current print jobs'),
-            'printJobsTotal':
-                CounterMetricFamily('cups_print_jobs_total',
-                                    'Total number of print jobs'),
-            'printersNum':
-                GaugeMetricFamily('cups_printers',
-                                  'Number of printers'),
-            'printerStatus':
-                GaugeMetricFamily('cups_printer_status_info',
-                                  'Status about printer alerts',
-                                  labels=['printer', 'model', 'status']),
-            'cupsUp':
-                GaugeMetricFamily('cups_up',
-                                  'CUPS status'),
-            'scrape_duration_seconds':
-                GaugeMetricFamily('cups_scrape_duration_seconds',
-                                  'Amount of time each scrape takes',
-                                  labels=[])
+            "printJobsNum": GaugeMetricFamily(
+                "cups_print_jobs_active",
+                "Number of current print jobs",
+            ),
+            "printJobsTotal": CounterMetricFamily(
+                "cups_print_jobs_total",
+                "Total number of print jobs",
+            ),
+            "printersNum": GaugeMetricFamily(
+                "cups_printers",
+                "Number of printers",
+            ),
+            "printerStatus": GaugeMetricFamily(
+                "cups_printer_status_info",
+                "Status about printer alerts",
+                labels=["printer", "model", "status"],
+            ),
+            "cupsUp": GaugeMetricFamily(
+                "cups_up",
+                "CUPS status",
+            ),
+            "scrape_duration_seconds": GaugeMetricFamily(
+                "cups_scrape_duration_seconds",
+                "Amount of time each scrape takes",
+                labels=[],
+            ),
         }
 
     def _getJobData(self, conn):
-        """Collects data about cups
-        """
+        """Collects data about cups"""
         jobs = conn.getJobs(which_jobs="all")
         if len(jobs) == 0:
-            self._prometheus_metrics['printJobsTotal'].add_metric([], 0)
+            self._prometheus_metrics["printJobsTotal"].add_metric([], 0)
         else:
             lastjobID = list(jobs.keys())[-1]
-            self._prometheus_metrics['printJobsTotal'].add_metric(
-                [], lastjobID)
+            self._prometheus_metrics["printJobsTotal"].add_metric([], lastjobID)
 
         jobs = conn.getJobs()
         if len(jobs) == 0:
-            self._prometheus_metrics['printJobsNum'].add_metric([], 0)
+            self._prometheus_metrics["printJobsNum"].add_metric([], 0)
         else:
-            self._prometheus_metrics['printJobsNum'].add_metric(
-                [],
-                len(jobs))
+            self._prometheus_metrics["printJobsNum"].add_metric([], len(jobs))
 
     def _getPrinterStatus(self, printers):
         """Gathers printer status data
@@ -131,37 +150,44 @@ class CUPSCollector:
             printers {dict} -- dict of printers
         """
         for key, value in printers.items():
-            if value['printer-state-reasons'][0] != 'none':
-                self._prometheus_metrics['printerStatus'].add_metric([
-                    key,
-                    value['printer-make-and-model'],
-                    value['printer-state-reasons'][0]],
-                    0)
+            if value["printer-state-reasons"][0] != "none":
+                self._prometheus_metrics["printerStatus"].add_metric(
+                    [
+                        key,
+                        value["printer-make-and-model"],
+                        value["printer-state-reasons"][0],
+                    ],
+                    0,
+                )
             else:
-                self._prometheus_metrics['printerStatus'].add_metric([
-                    key,
-                    value['printer-make-and-model'],
-                    'happy'],
-                    1)
+                self._prometheus_metrics["printerStatus"].add_metric(
+                    [key, value["printer-make-and-model"], "happy"], 1
+                )
 
 
 class SignalHandler:
     exit = False
 
     def __init__(self):
-        signal.signal(signal.SIGINT, self.exit_gracefully)
-        signal.signal(signal.SIGTERM, self.exit_gracefully)
+        signal.signal(signal.SIGINT, self.exit_application)
+        signal.signal(signal.SIGTERM, self.exit_application)
 
-    def exit_gracefully(self, signum, frame):
+    def exit_application(self, signum, frame):
+        signame = signal.Signals(signum).name
+        logger.warning(f"Got signal {signum} ({signame}). Exiting")
         self.exit = True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Start up the server to expose the metrics.
-    REGISTRY.register(CUPSCollector(
-        args.cups_host,
-        args.cups_port,
-        args.cups_user))
+    logger.warning(f"Starting CUPS exporter server with args: {args}")
+    REGISTRY.register(
+        CUPSCollector(
+            args.cups_host,
+            args.cups_port,
+            args.cups_user,
+        )
+    )
     start_http_server(args.listen_port)
 
     sig_handler = SignalHandler()
