@@ -13,7 +13,5 @@ WORKDIR /usr/app
 COPY . /usr/app
 USER app
 
-# Add and run python app
-COPY cups_exporter.py .
 ENTRYPOINT ["python", "cups_exporter.py"]
 CMD []

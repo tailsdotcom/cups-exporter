@@ -1,0 +1,8 @@
+services:
+  cups-exporter:
+    build: .
+    ports:
+      - 9329:9329
+    restart: unless-stopped
+    user: 10001:10001
+    command: --cups-port 6631
