@@ -12,17 +12,43 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_and_push:
-    name: Build and Push Service container
-    uses: tailsdotcom/actions/.github/workflows/build-container.yml@main
-    with:
-      aws_role: 426105708615:role/ci-cups-exporter
-      image: 426105708615.dkr.ecr.eu-west-1.amazonaws.com/infrastructure-engineering/cups-exporter
+  build:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_NUMBER }}:role/ci-cups-exporter
+          aws-region: eu-west-1
 
-  retag:
-    name: Retag image
-    needs: build_and_push
-    uses: tailsdotcom/actions/.github/workflows/retag-image-from-branch.yml@main
-    with:
-      aws_role: 426105708615:role/ci-cups-exporter
-      repository: infrastructure-engineering/cups-exporter
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=${{ vars.AWS_ACCOUNT_NUMBER }}.dkr.ecr.eu-west-1.amazonaws.com/moby/buildkit:buildx-stable-1
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.AWS_ACCOUNT_NUMBER }}.dkr.ecr.eu-west-1.amazonaws.com/infrastructure-engineering/cups-exporter
+          flavor: |
+            latest=false
+          tags: |
+            type=sha,format=long,prefix=prod-,suffix=-{{date 'X'}},priority=1500,enable=${{ github.ref_type == 'branch' }}
+            type=sha,format=long,prefix=
+            type=ref,event=branch
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          push: ${{ github.ref_name == 'main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
