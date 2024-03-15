@@ -40,7 +40,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=sha,format=long,prefix=prod-,suffix=-{{date 'X'}},priority=1500,enable=${{ github.ref_type == 'branch' }}
+            type=sha,format=long,prefix={{branch}}-,suffix=-{{date 'X'}},priority=1500,enable=${{ github.ref_type == 'branch' }}
+            type=sha,format=long,prefix=staging-,suffix=-{{date 'X'}},priority=1500,enable=${{ github.ref_name == 'main' }}
             type=sha,format=long,prefix=
             type=ref,event=branch
 

@@ -1,0 +1,36 @@
+permissions:
+  id-token: write # required to use OIDC authentication
+  contents: read # required to checkout the code from the repo
+
+name: Promote to prod
+on:
+  workflow_dispatch:
+
+# Only run one workflow at a time for a given branch.
+# This blocks new staging images getting built and pushed
+# while this workflow is running.
+concurrency: ${{ github.ref_name }}-promote
+
+jobs:
+  retag:
+    name: Retag for prod
+    if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_NUMBER }}:role/ci-cups-exporter
+          aws-region: eu-west-1
+
+      - name: Get timestamped tag
+        id: tag
+        run: |
+          echo "tag=prod-${{ github.sha }}-$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Retag for prod
+        uses: abronin/ecr-retag-action@v1
+        with:
+          repository: infrastructure-engineering/cups-exporter
+          tag: ${{ github.sha }}
+          new-tags: prod, ${{ steps.tag.outputs.tag }}
