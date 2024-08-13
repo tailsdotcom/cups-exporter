@@ -1,8 +1,9 @@
 permissions:
   id-token: write # required to use OIDC authentication
   contents: read # required to checkout the code from the repo
+  packages: write
 
-name: Build Image and Push to ECR
+name: Build Image and Push to ECR and GHCR
 
 # Only run one deployment at a time for a given branch
 concurrency: ci-${{ github.ref }}
@@ -15,7 +16,7 @@ jobs:
   build:
     name: Build and Push
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,11 +33,20 @@ jobs:
         with:
           driver-opts: image=${{ vars.AWS_ACCOUNT_NUMBER }}.dkr.ecr.eu-west-1.amazonaws.com/moby/buildkit:buildx-stable-1
 
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.AWS_ACCOUNT_NUMBER }}.dkr.ecr.eu-west-1.amazonaws.com/infrastructure-engineering/cups-exporter
+          images: |
+            ${{ vars.AWS_ACCOUNT_NUMBER }}.dkr.ecr.eu-west-1.amazonaws.com/infrastructure-engineering/cups-exporter
+            ghcr.io/${{ github.repository }}
           flavor: |
             latest=false
           tags: |
@@ -53,3 +63,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          platforms: |
+            linux/amd64
+            linux/arm64
